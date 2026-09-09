@@ -1,0 +1,103 @@
+# Autoservis Rihtaric, Apache / LiteSpeed configuration for shared hosting (Hostinger).
+# Upload the whole contents of dist/ (including this file) to public_html.
+# Order: 0. Google Search Console verification file, 1. canonical domain and https, 2. 410 for WordPress
+# internals, 3. 301 map of the old WordPress site, 4. error document, 5. compression, MIME, caching and
+# security headers.
+
+Options -Indexes
+DirectoryIndex index.html
+AddDefaultCharset UTF-8
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # ---------- 0. Google Search Console verification file ----------
+  # google<hash>.html at the root is served as it is, with no redirect and no rewrite, so Google always
+  # gets a 200 with the original one line of text. This rule must stay first.
+  RewriteRule ^google[0-9a-f]+\.html$ - [L]
+
+  # ---------- 1. http -> https, non-www -> www (one hop to the canonical host) ----------
+  RewriteCond %{HTTPS} off [OR]
+  RewriteCond %{HTTP:X-Forwarded-Proto} =http [OR]
+  RewriteCond %{HTTP_HOST} !^www\.asrihtaric\.com\.hr$ [NC]
+  RewriteCond %{HTTP_HOST} (asrihtaric\.com\.hr)$ [NC]
+  RewriteRule ^ https://www.asrihtaric.com.hr%{REQUEST_URI} [R=301,L]
+
+  # ---------- 2. WordPress internals that no longer exist: 410 Gone ----------
+  RewriteRule ^(feed|comments/feed|wp-json(/.*)?|xmlrpc\.php|wp-login\.php|wp-admin(/.*)?)/?$ - [G,L]
+
+  # ---------- 3. Old WordPress URLs (see audit/data/old-urls.csv): 301 to the one-pager sections ----------
+  # Fragments survive because Apache sends them to the browser in the Location header (flag NE keeps the #).
+  RewriteRule ^(servis|usluge|category/usluge)/?$ https://www.asrihtaric.com.hr/#usluge [R=301,NE,L]
+  RewriteRule ^galerija/?$ https://www.asrihtaric.com.hr/#galerija [R=301,NE,L]
+  RewriteRule ^wp-content/gallery/.* https://www.asrihtaric.com.hr/#galerija [R=301,NE,L]
+  RewriteRule ^(gdje-smo|adresa|kontakt)/?$ https://www.asrihtaric.com.hr/#kontakt [R=301,NE,L]
+  RewriteRule ^o-nama/?$ https://www.asrihtaric.com.hr/#zasto-mi [R=301,NE,L]
+  RewriteRule ^(malciranje|objave|category/.*|author/.*|tag/.*|page/.*)/?$ https://www.asrihtaric.com.hr/ [R=301,L]
+  RewriteRule ^(wp-sitemap.*\.xml|sitemap\.xml)$ https://www.asrihtaric.com.hr/sitemap-index.xml [R=301,L]
+  RewriteRule ^(wp-content|wp-includes)/.* https://www.asrihtaric.com.hr/ [R=301,L]
+</IfModule>
+
+# ---------- 4. Error page ----------
+ErrorDocument 404 /404.html
+
+# ---------- 5a. Compression ----------
+<IfModule mod_brotli.c>
+  AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/css text/xml text/javascript application/javascript application/json application/xml application/manifest+json image/svg+xml font/ttf font/otf
+</IfModule>
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml text/javascript application/javascript application/json application/xml application/manifest+json image/svg+xml font/ttf font/otf
+</IfModule>
+
+# ---------- 5b. MIME types ----------
+<IfModule mod_mime.c>
+  AddType font/woff2 .woff2
+  AddType font/woff .woff
+  AddType image/webp .webp
+  AddType image/svg+xml .svg
+  AddType application/manifest+json .webmanifest
+  AddType text/plain .txt
+</IfModule>
+
+# ---------- 5c. Caching ----------
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresDefault "access plus 1 week"
+  ExpiresByType text/html "access plus 0 seconds"
+  ExpiresByType application/xml "access plus 1 hour"
+  ExpiresByType text/xml "access plus 1 hour"
+  ExpiresByType text/plain "access plus 1 hour"
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType text/javascript "access plus 1 year"
+  ExpiresByType font/woff2 "access plus 1 year"
+  ExpiresByType font/woff "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/png "access plus 1 month"
+  ExpiresByType image/jpeg "access plus 1 month"
+  ExpiresByType image/svg+xml "access plus 1 month"
+  ExpiresByType image/x-icon "access plus 1 month"
+  ExpiresByType application/manifest+json "access plus 1 week"
+</IfModule>
+
+# ---------- 5d. Headers (take effect on the live server only; the local preview ignores this file) ----------
+<IfModule mod_headers.c>
+  # Hashed build assets are immutable.
+  <LocationMatch "^/_astro/">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </LocationMatch>
+  # HTML is always revalidated.
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+  # Security headers.
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  # Content Security Policy that the built HTML satisfies (inline scripts and styles, self hosted fonts and images,
+  # Google Maps iframe only after consent). If the map does not load, remove this one line and check the console.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; object-src 'none'"
+  Header unset X-Powered-By
+</IfModule>

@@ -1,0 +1,1 @@
+const t=document.getElementById("vrh");if(t){const e=()=>{document.documentElement.style.setProperty("--header-height",`${t.offsetHeight}px`)};e(),typeof ResizeObserver=="function"?new ResizeObserver(e).observe(t):window.addEventListener("resize",e)}
